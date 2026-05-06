@@ -1,18 +1,24 @@
 GC=gcc
-FILE=src/main.c
-GUI_FILE=src/gui.c
-INCLUDE_DIR=/include
-OUTPUT=app.o
+CFLAGS=-Wall -Wextra -O2 -Iinclude
 
-all:
-	${GC} ${FILE} -I/${INCLUDE_DIR} -o ${OUTPUT}
+DAEMON_BIN=fanctld
+DAEMON_SRCS=src/main.c src/raspberry.c
+
+GUI_BIN=gui
+GUI_SRC=src/gui.c
+
+.PHONY: all ui clean run
+
+all: ${DAEMON_BIN}
+
+${DAEMON_BIN}: ${DAEMON_SRCS}
+	${GC} ${CFLAGS} -o ${DAEMON_BIN} ${DAEMON_SRCS}
 
 ui:
-	${GC}  `pkg-config --cflags gtk+-3.0 pango`  -o gui.o ${GUI_FILE} `pkg-config --libs gtk+-3.0 pango`
+	${GC} ${CFLAGS} `pkg-config --cflags gtk+-3.0 pango` -o ${GUI_BIN} ${GUI_SRC} `pkg-config --libs gtk+-3.0 pango`
 
 clean:
-	- rm *.o 2> /dev/null &
-	- rm src/*.o 2> /dev/null
+	- rm -f ${DAEMON_BIN} ${GUI_BIN} *.o src/*.o
 
-run:
-	./${OUTPUT}
+run: ${DAEMON_BIN}
+	./${DAEMON_BIN}
