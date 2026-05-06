@@ -1,14 +1,12 @@
 #include <gtk/gtk.h>
 #include <pango/pango-font.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 
-#define ENTRY_FOR_TEMPERATURE 100
-#define ENTRY_FOR_PIN 101
-
-#define TEMPERATURE_ENTRY_INPUT_VALUE_ERROR -1
-#define PIN_ENTRY_INPUT_VALUE_ERROR -2
+static const int VALID_PI3_PINS[] = {
+  4, 5, 6, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+};
+#define VALID_PI3_PINS_COUNT (sizeof(VALID_PI3_PINS) / sizeof(VALID_PI3_PINS[0]))
 
 void set_font_size(GtkWidget *widget, int size) {
   PangoFontDescription *font_desc = pango_font_description_new();
@@ -17,50 +15,29 @@ void set_font_size(GtkWidget *widget, int size) {
   pango_font_description_free(font_desc);
 }
 
-static int is_valid_pi3_pin(long pin) {
-  static const int valid_pins[] = {
-    4, 5, 6, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
-  };
-  for (size_t i = 0; i < sizeof(valid_pins) / sizeof(valid_pins[0]); i++) {
-    if (valid_pins[i] == pin) return 1;
-  }
-  return 0;
-}
-
-int validate_input(const char *value, int type) {
-  int err = (type == ENTRY_FOR_TEMPERATURE)
-              ? TEMPERATURE_ENTRY_INPUT_VALUE_ERROR
-              : PIN_ENTRY_INPUT_VALUE_ERROR;
-
-  if (value == NULL || *value == '\0') return err;
-
-  char *endptr;
-  long casted_value = strtol(value, &endptr, 10);
-
-  if (*endptr != '\0') return err;
-
-  if (type == ENTRY_FOR_TEMPERATURE) {
-    if (casted_value < 0 || casted_value > 100) return err;
-  } else {
-    if (!is_valid_pi3_pin(casted_value)) return err;
-  }
-
-  return (int)casted_value;
-}
-
 void handle_button_click(GtkButton *button, gpointer data) {
+  (void)button;
+  (void)data;
+
   GtkWidget *dialog;
   GtkWidget *content_area;
   GtkWidget *label_temperature;
-  GtkWidget *temperature_entry;
+  GtkWidget *temperature_spin;
   GtkWidget *label_pin;
-  GtkWidget *pin_entry;
+  GtkWidget *pin_combo;
 
-  label_temperature = gtk_label_new("Set temperature for the fan");
-  temperature_entry = gtk_entry_new();
+  label_temperature = gtk_label_new("Temperature threshold (°C)");
+  temperature_spin = gtk_spin_button_new_with_range(0.0, 100.0, 1.0);
+  gtk_spin_button_set_value(GTK_SPIN_BUTTON(temperature_spin), 40);
 
-  label_pin = gtk_label_new("Set pin of the fan");
-  pin_entry = gtk_entry_new();
+  label_pin = gtk_label_new("Fan pin (BCM)");
+  pin_combo = gtk_combo_box_text_new();
+  for (size_t i = 0; i < VALID_PI3_PINS_COUNT; i++) {
+    char text[8];
+    snprintf(text, sizeof(text), "%d", VALID_PI3_PINS[i]);
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(pin_combo), text);
+  }
+  gtk_combo_box_set_active(GTK_COMBO_BOX(pin_combo), 0);
 
   set_font_size(label_temperature, 13);
   set_font_size(label_pin, 13);
@@ -75,35 +52,22 @@ void handle_button_click(GtkButton *button, gpointer data) {
                                        NULL);
 
   content_area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+  gtk_container_set_border_width(GTK_CONTAINER(content_area), 10);
+  gtk_box_set_spacing(GTK_BOX(content_area), 6);
 
   gtk_container_add(GTK_CONTAINER(content_area), label_temperature);
-  gtk_container_add(GTK_CONTAINER(content_area), temperature_entry);
-  gtk_widget_show(label_temperature);
-  gtk_widget_show(temperature_entry);
-
+  gtk_container_add(GTK_CONTAINER(content_area), temperature_spin);
   gtk_container_add(GTK_CONTAINER(content_area), label_pin);
-  gtk_container_add(GTK_CONTAINER(content_area), pin_entry);
-  gtk_widget_show(label_pin);
-  gtk_widget_show(pin_entry);
+  gtk_container_add(GTK_CONTAINER(content_area), pin_combo);
 
-  gtk_entry_set_width_chars(GTK_ENTRY(temperature_entry), 3);
+  gtk_widget_show_all(dialog);
 
   if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-    const gchar *temp_text = gtk_entry_get_text(GTK_ENTRY(temperature_entry));
-    const gchar *pin_text = gtk_entry_get_text(GTK_ENTRY(pin_entry));
+    int temp_value = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(temperature_spin));
+    int pin_index = gtk_combo_box_get_active(GTK_COMBO_BOX(pin_combo));
+    int pin_value = VALID_PI3_PINS[pin_index];
 
-    int temp_value = validate_input(temp_text, ENTRY_FOR_TEMPERATURE);
-    int pin_value = validate_input(pin_text, ENTRY_FOR_PIN);
-
-    if (temp_value < 0 || pin_value < 0) {
-      GtkWidget *err = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(button))),
-                                              GTK_DIALOG_MODAL,
-                                              GTK_MESSAGE_ERROR,
-                                              GTK_BUTTONS_OK,
-                                              "Invalid input: temperature must be 0–100; pin must be a free BCM GPIO on Pi 3 (4, 5, 6, 12, 13, 16–27).");
-      gtk_dialog_run(GTK_DIALOG(err));
-      gtk_widget_destroy(err);
-    }
+    g_print("settings: temp=%d°C, pin=%d\n", temp_value, pin_value);
   }
 
   gtk_widget_destroy(dialog);
