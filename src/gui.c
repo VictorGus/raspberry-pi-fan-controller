@@ -1,6 +1,7 @@
 #include <gtk/gtk.h>
 #include <pango/pango-font.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 #define ENTRY_FOR_TEMPERATURE 100
@@ -16,14 +17,20 @@ void set_font_size(GtkWidget *widget, int size) {
   pango_font_description_free(font_desc);
 }
 
-int validate_input(char *value, int type) {
-  int casted_value;  // cast char to int
+int validate_input(const char *value, int type) {
+  int err = (type == ENTRY_FOR_TEMPERATURE)
+              ? TEMPERATURE_ENTRY_INPUT_VALUE_ERROR
+              : PIN_ENTRY_INPUT_VALUE_ERROR;
 
-  if (type ==  ENTRY_FOR_TEMPERATURE) {
-    if (casted_value < 0 || casted_value > 100) return TEMPERATURE_ENTRY_INPUT_VALUE_ERROR;
-  } else {
-    if (casted_value < 0 || casted_value > 100) return PIN_ENTRY_INPUT_VALUE_ERROR; // depends on PIN numbers
-  }
+  if (value == NULL || *value == '\0') return err;
+
+  char *endptr;
+  long casted_value = strtol(value, &endptr, 10);
+
+  if (*endptr != '\0') return err;
+  if (casted_value < 0 || casted_value > 100) return err;
+
+  return (int)casted_value;
 }
 
 void handle_button_click(GtkButton *button, gpointer data) {
@@ -65,10 +72,26 @@ void handle_button_click(GtkButton *button, gpointer data) {
   gtk_widget_show(pin_entry);
 
   gtk_entry_set_width_chars(GTK_ENTRY(temperature_entry), 3);
-  
-  gtk_dialog_run(GTK_DIALOG(dialog));
-  gtk_widget_destroy(dialog);
 
+  if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+    const gchar *temp_text = gtk_entry_get_text(GTK_ENTRY(temperature_entry));
+    const gchar *pin_text = gtk_entry_get_text(GTK_ENTRY(pin_entry));
+
+    int temp_value = validate_input(temp_text, ENTRY_FOR_TEMPERATURE);
+    int pin_value = validate_input(pin_text, ENTRY_FOR_PIN);
+
+    if (temp_value < 0 || pin_value < 0) {
+      GtkWidget *err = gtk_message_dialog_new(GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(button))),
+                                              GTK_DIALOG_MODAL,
+                                              GTK_MESSAGE_ERROR,
+                                              GTK_BUTTONS_OK,
+                                              "Invalid input: temperature and pin must be integers in [0, 100].");
+      gtk_dialog_run(GTK_DIALOG(err));
+      gtk_widget_destroy(err);
+    }
+  }
+
+  gtk_widget_destroy(dialog);
 }
 
 void switch_toggle(GtkSwitch *widget, gpointer data) {
