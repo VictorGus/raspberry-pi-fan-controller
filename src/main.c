@@ -18,18 +18,18 @@
 #define DEFAULT_TEMP_C 40
 #define DEFAULT_PIN    4
 
-struct client {
+typedef struct {
   int    fd;
   char   buf[LINE_BUF];
   size_t len;
-};
+} client;
 
-struct daemon_state {
+typedef struct {
   int temp_threshold;
   int pin;
   int fan_on;
   int last_temp;
-};
+} daemon_state;
 
 static volatile sig_atomic_t shutdown_requested = 0;
 
@@ -70,7 +70,7 @@ static void send_str(int fd, const char *s) {
   (void)n;
 }
 
-static void handle_line(struct daemon_state *state, int client_fd, const char *line) {
+static void handle_line(daemon_state *state, int client_fd, const char *line) {
   char cmd[16] = {0}, target[16] = {0};
   int value = 0;
   int n = sscanf(line, "%15s %15s %d", cmd, target, &value);
@@ -109,7 +109,7 @@ static void handle_line(struct daemon_state *state, int client_fd, const char *l
   send_str(client_fd, "ERR unknown command\n");
 }
 
-static void process_client_buffer(struct daemon_state *state, struct client *c) {
+static void process_client_buffer(daemon_state *state, client *c) {
   while (1) {
     char *nl = memchr(c->buf, '\n', c->len);
     if (!nl) break;
@@ -121,7 +121,7 @@ static void process_client_buffer(struct daemon_state *state, struct client *c) 
   }
 }
 
-static void tick(struct daemon_state *state) {
+static void tick(daemon_state *state) {
   state->last_temp = get_temperature();
 
   if (!state->fan_on && state->last_temp >= state->temp_threshold) {
@@ -145,7 +145,7 @@ int main(void) {
   signal(SIGTERM, on_signal);
   signal(SIGPIPE, SIG_IGN);
 
-  struct daemon_state state = {
+  daemon_state state = {
     .temp_threshold = DEFAULT_TEMP_C,
     .pin            = DEFAULT_PIN,
     .fan_on         = 0,
@@ -155,7 +155,7 @@ int main(void) {
   int listen_fd = create_listener(SOCKET_PATH);
   if (listen_fd < 0) return 1;
 
-  struct client clients[MAX_CLIENTS];
+  client clients[MAX_CLIENTS];
   for (int i = 0; i < MAX_CLIENTS; i++) {
     clients[i].fd = -1;
     clients[i].len = 0;
