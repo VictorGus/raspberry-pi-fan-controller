@@ -17,6 +17,16 @@ void set_font_size(GtkWidget *widget, int size) {
   pango_font_description_free(font_desc);
 }
 
+static int is_valid_pi3_pin(long pin) {
+  static const int valid_pins[] = {
+    4, 5, 6, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+  };
+  for (size_t i = 0; i < sizeof(valid_pins) / sizeof(valid_pins[0]); i++) {
+    if (valid_pins[i] == pin) return 1;
+  }
+  return 0;
+}
+
 int validate_input(const char *value, int type) {
   int err = (type == ENTRY_FOR_TEMPERATURE)
               ? TEMPERATURE_ENTRY_INPUT_VALUE_ERROR
@@ -28,7 +38,12 @@ int validate_input(const char *value, int type) {
   long casted_value = strtol(value, &endptr, 10);
 
   if (*endptr != '\0') return err;
-  if (casted_value < 0 || casted_value > 100) return err;
+
+  if (type == ENTRY_FOR_TEMPERATURE) {
+    if (casted_value < 0 || casted_value > 100) return err;
+  } else {
+    if (!is_valid_pi3_pin(casted_value)) return err;
+  }
 
   return (int)casted_value;
 }
@@ -85,7 +100,7 @@ void handle_button_click(GtkButton *button, gpointer data) {
                                               GTK_DIALOG_MODAL,
                                               GTK_MESSAGE_ERROR,
                                               GTK_BUTTONS_OK,
-                                              "Invalid input: temperature and pin must be integers in [0, 100].");
+                                              "Invalid input: temperature must be 0–100; pin must be a free BCM GPIO on Pi 3 (4, 5, 6, 12, 13, 16–27).");
       gtk_dialog_run(GTK_DIALOG(err));
       gtk_widget_destroy(err);
     }
