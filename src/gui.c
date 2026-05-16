@@ -29,6 +29,7 @@ typedef struct {
   GtkLabel *fan_status;
   GtkLabel *pin_string;
   GtkLabel *threshold_string;
+  GtkLabel *conn_indicator;
 } ui_labels;
 
 void set_font_size(GtkWidget *widget, int size) {
@@ -97,10 +98,21 @@ static void set_status_class(GtkWidget *w, const char *cls) {
   gtk_style_context_add_class(ctx, cls);
 }
 
+static void set_conn_class(GtkWidget *w, int connected) {
+  GtkStyleContext *ctx = gtk_widget_get_style_context(w);
+  gtk_style_context_remove_class(ctx, connected ? "conn-off" : "conn-on");
+  gtk_style_context_add_class(ctx, connected ? "conn-on" : "conn-off");
+}
+
 static gboolean tick_state(gpointer user_data) {
   ui_labels *u = user_data;
   state_snapshot s = fetch_state();
   char buf[64];
+
+  set_conn_class(GTK_WIDGET(u->conn_indicator), s.connected);
+  gtk_widget_set_tooltip_text(GTK_WIDGET(u->conn_indicator),
+                              s.connected ? "Connected to fanctld"
+                                          : "Disconnected from fanctld");
 
   if (!s.connected) {
     gtk_label_set_text(u->temperature, "—");
@@ -218,7 +230,9 @@ int main(int argc, char **argv) {
     ".fan-on { color: #2ecc40; font-weight: bold; }"
     ".fan-off { color: #888888; }"
     ".disconnected { color: #ff4136; font-style: italic; }"
-    ".card { border: 1px solid rgba(150, 150, 150, 0.3); border-radius: 10px; }";
+    ".card { border: 1px solid rgba(150, 150, 150, 0.3); border-radius: 10px; }"
+    ".conn-on { color: #2ecc40; }"
+    ".conn-off { color: #ff4136; }";
   gtk_css_provider_load_from_data(provider, css, -1, NULL);
   gtk_style_context_add_provider_for_screen(screen,
                                             GTK_STYLE_PROVIDER(provider),
@@ -237,6 +251,9 @@ int main(int argc, char **argv) {
   button = gtk_button_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_BUTTON);
   gtk_widget_set_tooltip_text(button, "Settings");
   gtk_header_bar_pack_end(GTK_HEADER_BAR(header), button);
+
+  GtkWidget *conn_indicator = gtk_label_new("●");
+  gtk_header_bar_pack_start(GTK_HEADER_BAR(header), conn_indicator);
 
   GtkWidget *outer_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
 
@@ -280,6 +297,7 @@ int main(int argc, char **argv) {
   labels.fan_status = GTK_LABEL(fan_status_label);
   labels.pin_string = GTK_LABEL(pin_string_label);
   labels.threshold_string = GTK_LABEL(temperature_string_label);
+  labels.conn_indicator = GTK_LABEL(conn_indicator);
 
   tick_state(&labels);
   g_timeout_add(POLL_INTERVAL_MS, tick_state, &labels);
