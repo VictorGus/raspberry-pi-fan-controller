@@ -163,9 +163,9 @@ void handle_button_click(GtkButton *button, gpointer data) {
   dialog = gtk_dialog_new_with_buttons("Settings",
                                        parent,
                                        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
-                                       GTK_STOCK_OK,
+                                       "_OK",
                                        GTK_RESPONSE_ACCEPT,
-                                       GTK_STOCK_CANCEL,
+                                       "_Cancel",
                                        GTK_RESPONSE_REJECT,
                                        NULL);
 
@@ -198,7 +198,6 @@ void handle_button_click(GtkButton *button, gpointer data) {
 int main(int argc, char **argv) {
   GtkWidget *window;
   GtkWidget *button;
-  GtkWidget *grid;
 
   GtkWidget *temperature_label;
   GtkWidget *temperature_string_label;
@@ -218,25 +217,36 @@ int main(int argc, char **argv) {
   const gchar *css =
     ".fan-on { color: #2ecc40; font-weight: bold; }"
     ".fan-off { color: #888888; }"
-    ".disconnected { color: #ff4136; font-style: italic; }";
+    ".disconnected { color: #ff4136; font-style: italic; }"
+    ".card { border: 1px solid rgba(150, 150, 150, 0.3); border-radius: 10px; }";
   gtk_css_provider_load_from_data(provider, css, -1, NULL);
   gtk_style_context_add_provider_for_screen(screen,
                                             GTK_STYLE_PROVIDER(provider),
                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
   window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_title(GTK_WINDOW(window), "Fan controller");
-  gtk_container_set_border_width(GTK_CONTAINER(window), 50);
+  gtk_container_set_border_width(GTK_CONTAINER(window), 20);
   gtk_window_set_default_size(GTK_WINDOW(window), 400, 400);
   gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
 
-  grid = gtk_grid_new();
-  gtk_grid_set_row_homogeneous(GTK_GRID(grid), TRUE);
-  gtk_grid_set_column_homogeneous(GTK_GRID(grid), TRUE);
-  gtk_grid_set_column_spacing(GTK_GRID(grid), 5);
-  gtk_grid_set_row_spacing(GTK_GRID(grid), 15);
+  GtkWidget *header = gtk_header_bar_new();
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header), "Fan controller");
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(window), header);
 
-  button = gtk_button_new_with_label("Settings");
+  button = gtk_button_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_BUTTON);
+  gtk_widget_set_tooltip_text(button, "Settings");
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(header), button);
+
+  GtkWidget *outer_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+
+  GtkWidget *temp_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_set_border_width(GTK_CONTAINER(temp_card), 16);
+  gtk_style_context_add_class(gtk_widget_get_style_context(temp_card), "card");
+
+  GtkWidget *status_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+  gtk_container_set_border_width(GTK_CONTAINER(status_card), 14);
+  gtk_style_context_add_class(gtk_widget_get_style_context(status_card), "card");
 
   temperature_label = gtk_label_new("—");
   set_font_size(temperature_label, 35);
@@ -254,13 +264,15 @@ int main(int argc, char **argv) {
   gtk_widget_set_halign(temperature_string_label, GTK_ALIGN_START);
   gtk_widget_set_halign(temperature_label, GTK_ALIGN_CENTER);
 
-  gtk_grid_attach(GTK_GRID(grid), temperature_label, 0, 0, 1, 1);
-  gtk_grid_attach(GTK_GRID(grid), fan_status_label, 0, 1, 1, 1);
-  gtk_grid_attach(GTK_GRID(grid), pin_string_label, 0, 2, 1, 1);
-  gtk_grid_attach(GTK_GRID(grid), temperature_string_label, 0, 3, 1, 1);
-  gtk_grid_attach(GTK_GRID(grid), button, 0, 4, 1, 1);
+  gtk_container_add(GTK_CONTAINER(temp_card), temperature_label);
+  gtk_container_add(GTK_CONTAINER(status_card), fan_status_label);
+  gtk_container_add(GTK_CONTAINER(status_card), pin_string_label);
+  gtk_container_add(GTK_CONTAINER(status_card), temperature_string_label);
 
-  gtk_container_add(GTK_CONTAINER(window), grid);
+  gtk_box_pack_start(GTK_BOX(outer_box), temp_card, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(outer_box), status_card, TRUE, TRUE, 0);
+
+  gtk_container_add(GTK_CONTAINER(window), outer_box);
   gtk_widget_show_all(window);
 
   static ui_labels labels;
