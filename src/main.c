@@ -167,17 +167,19 @@ int main(void) {
   tick(&state);
 
   while (!shutdown_requested) {
-    struct pollfd pfds[1 + MAX_CLIENTS];
+    struct pollfd pfds[1 + MAX_CLIENTS] = {0};
+    int pfd_to_client[1 + MAX_CLIENTS];
+
     pfds[0].fd = listen_fd;
     pfds[0].events = POLLIN;
-    pfds[0].revents = 0;
+    pfd_to_client[0] = -1;
 
     int nfds = 1;
     for (int i = 0; i < MAX_CLIENTS; i++) {
       if (clients[i].fd >= 0) {
         pfds[nfds].fd = clients[i].fd;
         pfds[nfds].events = POLLIN;
-        pfds[nfds].revents = 0;
+        pfd_to_client[nfds] = i;
         nfds++;
       }
     }
@@ -210,11 +212,10 @@ int main(void) {
       }
     }
 
-    int idx = 1;
-    for (int i = 0; i < MAX_CLIENTS; i++) {
+    for (int j = 1; j < nfds; j++) {
+      int i = pfd_to_client[j];
       if (clients[i].fd < 0) continue;
-      short revents = pfds[idx].revents;
-      idx++;
+      short revents = pfds[j].revents;
 
       if (revents & (POLLERR | POLLHUP | POLLNVAL)) {
         close(clients[i].fd);
