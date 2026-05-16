@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <poll.h>
 #include "raspberry.h"
 
@@ -36,6 +37,62 @@ static volatile sig_atomic_t shutdown_requested = 0;
 static void on_signal(int sig) {
   (void)sig;
   shutdown_requested = 1;
+}
+
+static const char *config_path(void) {
+  static char path[256];
+  if (path[0]) return path;
+  const char *home = getenv("HOME");
+  if (!home || !*home) home = "/tmp";
+  snprintf(path, sizeof(path), "%s/.config/fanctld.conf", home);
+  return path;
+}
+
+static void config_load(daemon_state *state) {
+  FILE *f = fopen(config_path(), "r");
+  if (!f) {
+    fprintf(stderr, "fanctld: no config at %s, using defaults\n", config_path());
+    return;
+  }
+  char line[128];
+  while (fgets(line, sizeof(line), f)) {
+    int v;
+    if (sscanf(line, "temperature=%d", &v) == 1) {
+      if (v >= 0 && v <= 100) state->temp_threshold = v;
+    } else if (sscanf(line, "pin=%d", &v) == 1) {
+      if (v >= 0 && v <= 27) state->pin = v;
+    }
+  }
+  fclose(f);
+  fprintf(stderr, "fanctld: loaded %s (threshold=%d, pin=%d)\n",
+          config_path(), state->temp_threshold, state->pin);
+}
+
+static void config_save(const daemon_state *state) {
+  const char *path = config_path();
+
+  char dir[256];
+  strncpy(dir, path, sizeof(dir) - 1);
+  dir[sizeof(dir) - 1] = '\0';
+  char *slash = strrchr(dir, '/');
+  if (slash) {
+    *slash = '\0';
+    mkdir(dir, 0755);
+  }
+
+  char tmp[280];
+  snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+  FILE *f = fopen(tmp, "w");
+  if (!f) {
+    fprintf(stderr, "fanctld: could not open %s: %s\n", tmp, strerror(errno));
+    return;
+  }
+  fprintf(f, "temperature=%d\npin=%d\n", state->temp_threshold, state->pin);
+  fclose(f);
+
+  if (rename(tmp, path) < 0) {
+    fprintf(stderr, "fanctld: could not rename %s -> %s: %s\n", tmp, path, strerror(errno));
+  }
 }
 
 static int create_listener(const char *path) {
@@ -92,6 +149,7 @@ static void handle_line(daemon_state *state, int client_fd, const char *line) {
         return;
       }
       state->temp_threshold = value;
+      config_save(state);
       send_str(client_fd, "OK\n");
       return;
     }
@@ -101,6 +159,7 @@ static void handle_line(daemon_state *state, int client_fd, const char *line) {
         return;
       }
       state->pin = value;
+      config_save(state);
       send_str(client_fd, "OK\n");
       return;
     }
@@ -151,6 +210,8 @@ int main(void) {
     .fan_on         = 0,
     .last_temp      = 0,
   };
+
+  config_load(&state);
 
   int listen_fd = create_listener(SOCKET_PATH);
   if (listen_fd < 0) return 1;
